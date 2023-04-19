@@ -1,41 +1,72 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Filter from './components/Filter'
 import PersonForm from './components/PersonForm'
 import Persons from './components/Persons'
+import EndPoints from './services/EndPoints'
 
 const App = () => {
-  const [persons, setPersons] = useState([
-    { name: 'Arto Hellas', number: '040-123456', id: 1 },
-    { name: 'Ada Lovelace', number: '39-44-5323523', id: 2 },
-    { name: 'Dan Abramov', number: '12-43-234345', id: 3 },
-    { name: 'Mary Poppendieck', number: '39-23-6423122', id: 4 }
-  ]) 
+  const [persons, setPersons] = useState([]) 
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
   const [showAll, setShowAll] = useState('')
+  const [newPopup, setPopUp] = useState(null)
 
+  //Fetch data from database
+  useEffect(() => {
+    EndPoints.getAll()
+      .then(response =>{
+        setPersons(response)
+      })
+      .catch(error =>{
+        console.error(error)
+      })
+  }, [])
+
+  //Form submission handler
   const handleOnSubmit = (event) => {
     event.preventDefault()
+  
     const newObject = {
       name: newName,
       number: newNumber,
-      id: persons.length + 1
     }
-    for(const person of persons){
-      if(JSON.stringify(newObject) === JSON.stringify(person)){
-        alert(`${newName} is already added to the phonebook`)
-      }
-    }
-    setPersons(persons.concat(newObject))
-    setNewName('')
-    setNewNumber('')
-  } 
-
   
+    const existingPerson = persons.find(person => person.name === newName)
+  
+    if (existingPerson) {
+      const message = `${newName} is already added to phonebook, replace the old number with a new one?`
+      if (window.confirm(message)) {
+        EndPoints.update(existingPerson.id, newObject)
+          .then(response => {
+            setPersons(persons.map(person => person.id !== existingPerson.id ? person : response))
+            setNewName('')
+            setNewNumber('')
+            setPopUp(`Updated ${existingPerson.name}`)
+          })
+          .catch(error => {
+            console.error(error)
+          })
+      }
+    } else {
+      EndPoints.create(newObject)
+        .then(response => {
+          setPersons(persons.concat(response))
+          setNewName('')
+          setNewNumber('')
+          setPopUp(`Added ${newName}`)
+        })
+        .catch(error => {
+          console.error(error)
+        })
+    }
+  }  
+ 
+  //Event handler for filtering input
   const handleFilter = (event) => {
     setShowAll(event.target.value)
   }
  
+  //Event handler for input name change
   const handleOnNameChange = (event) => {
     setNewName(event.target.value)
   }
@@ -44,10 +75,24 @@ const App = () => {
     person.name.toLowerCase().includes(showAll.toLowerCase())
    )
    
+  //Event handler for input number change
   const handleOnNumberChange = (event) => {
     setNewNumber(event.target.value)
   }
 
+  //Event handler for deleting a person
+  const handleDelete = (id) => {
+    if (window.confirm(`Are you sure you want to delete this person?`)) {
+      EndPoints.delete(id)
+        .then(() => {
+          setPersons(persons.filter(person => person.id !== id))
+        })
+        .catch(error => {
+          console.error(error)
+        })
+    }
+  }
+  
   return (
     <div>
       <h2>Phonebook</h2>
@@ -56,7 +101,7 @@ const App = () => {
         handleOnNumberChange={handleOnNumberChange}
           handleOnSubmit={handleOnSubmit}/>
       <h2>Numbers</h2>
-      <Persons personsToFilter={personsToFilter}/>
+      <Persons personsToFilter={personsToFilter} handleDelete={handleDelete}/>
     </div>
   )
 }
