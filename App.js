@@ -1,107 +1,150 @@
-import { useState, useEffect } from 'react'
-import Filter from './components/Filter'
-import PersonForm from './components/PersonForm'
-import Persons from './components/Persons'
-import EndPoints from './services/EndPoints'
+import React, { useEffect, useState } from "react"
+import Filter from "./components/Filter"
+import Notification from "./components/Notification"
+import PersonForm from "./components/PersonForm"
+import Persons from "./components/Persons"
+import Note from "./services/Note"
 
 const App = () => {
-  const [persons, setPersons] = useState([]) 
-  const [newName, setNewName] = useState('')
-  const [newNumber, setNewNumber] = useState('')
-  const [showAll, setShowAll] = useState('')
-  const [newPopup, setPopUp] = useState(null)
+  const [persons, setPersons] = useState([])
+  const [newName, setNewName] = useState("")
+  const [newNumber, setNewNumber] = useState("")
+  const [filter, setFilter] = useState("")
+  const [successMessage, setSuccessMessage] = useState(null)
+  const [errorMessage, setErrorMessage] = useState(null)
 
-  //Fetch data from database
   useEffect(() => {
-    EndPoints.getAll()
-      .then(response =>{
+    Note
+      .getAll()
+      .then(response => {
         setPersons(response)
       })
-      .catch(error =>{
-        console.error(error)
-      })
+      .catch((err) => alert(err))
   }, [])
 
-  //Form submission handler
-  const handleOnSubmit = (event) => {
-    event.preventDefault()
-  
-    const newObject = {
-      name: newName,
-      number: newNumber,
+  const handleNameChange = (e) => {
+    setNewName(e.target.value)
+  }
+
+  const handleNumberChange = (e) => {
+    setNewNumber(e.target.value)
+  }
+
+  const handleFilterChange = (e) => {
+    setFilter(e.target.value)
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+
+    if (!newName || !newNumber) {
+      alert("Please fill in the fields")
+      return
     }
-  
-    const existingPerson = persons.find(person => person.name === newName)
-  
-    if (existingPerson) {
-      const message = `${newName} is already added to phonebook, replace the old number with a new one?`
-      if (window.confirm(message)) {
-        EndPoints.update(existingPerson.id, newObject)
-          .then(response => {
-            setPersons(persons.map(person => person.id !== existingPerson.id ? person : response))
-            setNewName('')
-            setNewNumber('')
-            setPopUp(`Updated ${existingPerson.name}`)
+
+    // Person exists in the database
+    const existingPerson = persons.find(
+      (person) => person.name.toLowerCase() === newName.toLowerCase()
+    )
+
+    if (existingPerson && existingPerson.number === newNumber) {
+      alert(`${newName} is already added to phonebook`)
+      setNewName("")
+      setNewNumber("")
+      return
+    }
+
+    // Change number for existing person in database
+    if (existingPerson && existingPerson.number !== newNumber) {
+      if (window.confirm(`${existingPerson.name} is already added to phonebook, replace the old number with a new one?`)) {
+        const changedPerson = { ...existingPerson, number: newNumber }
+        const id = existingPerson.id
+
+        Note
+          .update(id, changedPerson)
+          .then((returnedPerson) => {
+            setPersons(persons.map(person => person.id !== id ? person : returnedPerson))
+            setSuccessMessage(`Updated ${changedPerson.name}'s number`)
+            setTimeout(() => {
+              setSuccessMessage(null)
+            }, 5000)
+            setNewName("")
+            setNewNumber("")
           })
-          .catch(error => {
-            console.error(error)
+          .catch(() => {
+              setErrorMessage(
+                `Information of ${changedPerson.name} has already been removed from server`
+              )
+              setTimeout( () => {
+                setErrorMessage(null);
+              },5000)
+              setPersons(persons.filter(p => p.id !== id))
+              setNewName("")
+              setNewNumber("")
+              setTimeout(() => {
+                setErrorMessage(null)
+              }, 5000)
           })
+        return
+      } else {
+        return
       }
-    } else {
-      EndPoints.create(newObject)
-        .then(response => {
-          setPersons(persons.concat(response))
-          setNewName('')
-          setNewNumber('')
-          setPopUp(`Added ${newName}`)
-        })
-        .catch(error => {
-          console.error(error)
-        })
     }
-  }  
- 
-  //Event handler for filtering input
-  const handleFilter = (event) => {
-    setShowAll(event.target.value)
-  }
- 
-  //Event handler for input name change
-  const handleOnNameChange = (event) => {
-    setNewName(event.target.value)
+
+    // Create new person & send to database
+    const newPerson = { name: newName, number: newNumber }
+    Note
+      .create(newPerson)
+      .then((returnedPerson) => {
+        setPersons(persons.concat(returnedPerson))
+        setSuccessMessage(`Added ${returnedPerson.name}`)
+        setTimeout(() => {
+          setSuccessMessage(null)
+        }, 3000)
+        setNewName("")
+        setNewNumber("")
+      })
+      .catch((err) => {
+        setErrorMessage(err.response.data.error)
+        setTimeout(() => {
+          setErrorMessage(null)
+        }, 5000)
+      })
   }
 
-  const personsToFilter = persons.filter(person => 
-    person.name.toLowerCase().includes(showAll.toLowerCase())
-   )
-   
-  //Event handler for input number change
-  const handleOnNumberChange = (event) => {
-    setNewNumber(event.target.value)
-  }
-
-  //Event handler for deleting a person
   const handleDelete = (id) => {
-    if (window.confirm(`Are you sure you want to delete this person?`)) {
-      EndPoints.delete(id)
+    if (window.confirm("Do you really want to delete this person")) {
+      Note
+        .remove(id)
         .then(() => {
-          setPersons(persons.filter(person => person.id !== id))
+          setSuccessMessage(`Deleted ${persons.find((person) => person.id === id).name}`)
+          setPersons(persons.filter((person) => person.id !== id))
+          setTimeout(() => {
+            setSuccessMessage(null)
+          }, 3000)
         })
-        .catch(error => {
-          console.error(error)
-        })
+        .catch((err) => alert(err))
+    } else {
+      return
     }
   }
-  
+
   return (
     <div>
       <h2>Phonebook</h2>
-      <Filter handleFilter={handleFilter}/>
-      <PersonForm handleOnNameChange={handleOnNameChange}
-        handleOnNumberChange={handleOnNumberChange}
-          handleOnSubmit={handleOnSubmit}/>
-      <h2>Numbers</h2>
-      <Persons personsToFilter={personsToFilter} handleDelete={handleDelete}/>
+      <Notification successMessage={successMessage} errorMessage={errorMessage} />
+      <Filter filter={filter} onFilterChange={handleFilterChange} />
+      <h2>Add a number</h2>
+      <Persons persons={persons} filter={filter} handleDelete={handleDelete} />
+      <div>
+        <PersonForm
+          onFormSubmit={handleSubmit}
+          onNameChange={handleNameChange}
+          onNumberChange={handleNumberChange}
+          nameValue={newName}
+          numberValue={newNumber}
+        />
+      </div>
     </div>
   )
 }
