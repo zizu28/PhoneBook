@@ -1,15 +1,10 @@
-const Persons = ({ personsToFilter }) => {
-    return(
-        <div>
-            <div>
-                {personsToFilter.map((person, i) =>
-                <p key={i}>
-                    {person.name} {person.number}
-                </p>
-                )}
-            </div>
-        </div>
-    )
+function Person({ person, handleDelete }) {
+  return (
+    <p key={person.name}>
+      {person.name} {person.number}
+      &nbsp;<button onClick={() => handleDelete(person.id)}>Delete</button>
+    </p>
+  );
 }
 
-export default Persons
+export default Person;
